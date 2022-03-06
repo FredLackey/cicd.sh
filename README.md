@@ -156,10 +156,6 @@ Below is an example of what the script will show at runtime.  This example only 
 
 Using a branch name beginning with the `prefix/` pattern will cause all branches with that prefix to be separately examined and processed.  This means it is possible for one feature or release branch to step on another in your target environment.  Talk to your team and plan accordingly.  
 
-**Script Stops at "Build Staged"**  
-
-At the time of this writing the script ends at assembling the build folder.  It's there for you to examine, however I have not yet implemented the actual deployment step.  Take a look at the `development` / `feature/f001b` example to see what I'm talking about.
-
 ```bash
 $ ./cicd.sh
 
