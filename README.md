@@ -45,7 +45,7 @@ The steps needed to deploy an app often change based on the environment it is ta
 
 To use the `cicd.sh` project for deploying your software, you must first ensure your application is broken apart into **three** separate source code repositories.  Assuming you were crafting the `myproject` data API project, the three git repositories you would need to create are:
 
-**Your source repo: `myproject-api`**  
+**Your source repo: `myproject`**  
 All of your application logic is stored with whatever name you desire.  Remember to _not_ include any environment specific data or deployment scripts.  
 
 **Your data repo: `myproject-data`**  
@@ -100,14 +100,14 @@ The source repo is expected to use common git prefixes for releases.  Branch pre
 
 ```json
 {
-  "myproject-api": {
+  "myproject": {
     "repos": {
-      "source": "ssh://gitservername/myproject-api",
+      "source": "ssh://gitservername/myproject",
       "data"  : "ssh://gitservername/myproject-data",
       "deploy": "ssh://gitservername/myproject-deploy"
     },
     "folders": {
-      "source": "/cicd-sh/myproject-api",
+      "source": "/cicd-sh/myproject",
       "data"  : "/cicd-sh/myproject-data",
       "deploy": "/cicd-sh/myproject-deploy"
     },
@@ -163,13 +163,13 @@ At the time of this writing the script ends at assembling the build folder.  It'
 ```bash
 $ ./cicd.sh
 
-myproject-api
+myproject
   Folders:
-    source : /cicd-sh/myproject-api
+    source : /cicd-sh/myproject
     data   : /cicd-sh/myproject-data
     deploy : /cicd-sh/myproject-deploy
   Repos:
-    source : ssh://gitservername/myproject-api
+    source : ssh://gitservername/myproject
              ... updating
     data   : ssh://gitservername/myproject-data
              ... updating
