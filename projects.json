@@ -1,0 +1,59 @@
+{
+  "myproject": {
+    "repos": {
+      "source": "ssh://gitservername/myproject",
+      "data"  : "ssh://gitservername/myproject-data",
+      "deploy": "ssh://gitservername/myproject-deploy"
+    },
+    "folders": {
+      "source": "/cicd-sh/myproject",
+      "data"  : "/cicd-sh/myproject-data",
+      "deploy": "/cicd-sh/myproject-deploy"
+    },
+    "environments": {
+      "development": {
+        "branches": {
+          "source": "feature/",
+          "data"  : "master",
+          "deploy": "main"
+        },
+        "archives": {
+          "failure" : {
+            "path"  : "/cicd-sh/_failure",
+            "excludes" : ".git,node_modules"
+          }
+        }
+      },
+      "staging": {
+        "branches": {
+          "source": "release/",
+          "data"  : "master",
+          "deploy": "main"
+        },
+        "archives": {
+          "failure" : {
+            "path"  : "/cicd-sh/_failure",
+            "excludes" : ".git,node_modules"
+          }
+        }
+      },
+      "production": {
+        "branches": {
+          "source": "main",
+          "data"  : "master",
+          "deploy": "main"
+        },
+        "archives": {
+          "success" : {
+            "path"  : "/cicd-sh/_success",
+            "excludes" : ".git,.env,node_modules,.vscode"
+          },
+          "failure" : {
+            "path"  : "/cicd-sh/_failure",
+            "excludes" : ".git,.env,node_modules,.vscode"
+          }
+        }
+      }
+    }
+  }
+}
