@@ -22,6 +22,9 @@ The script uses BASH as the only language.  Without this you are dead in the wat
 **git**  ([//wikipedia...](https://en.wikipedia.org/wiki/Git))  
 It is up to you to ensure git is installed and properly configured for the user account which will run the `cicd.sh` script.
 
+> **Important:**  
+> The repo URL provided in [`PROJECTS.md`](./PROJECTS.md) will be used as-is (e.g. "`git clone $REPO_URL`").  Test this command on your build workstation to ensure it will run with a simple `git clone` command.  If it does not work for _you_ then it will not work for the `cicd.sh` script.  
+
 **rsync**  ([//samba.org...](https://rsync.samba.org/))  
 During the file merge operations both `cp` and `rsync` are used.  Most distros contain rsync but you may want to double check before starting.
 
@@ -29,7 +32,7 @@ During the file merge operations both `cp` and `rsync` are used.  Most distros c
 The `jq` utility is used to parse the `projects.json` file.  Ensure it is installed.
 
 **ssh**  ([//wikipedia...](https://en.wikipedia.org/wiki/Web-based_SSH))  
-At the moment, everything I've tested uses SSH as the communication protocol with git.  You must ensure it is configured to work with your git repo before continuing.  
+At the moment, everything I've tested uses SSH as the communication protocol with git.  You must ensure it is configured to work with your git repo before continuing.
 
 ## 12-Factor(ish) Methodology
 
@@ -92,11 +95,7 @@ The `project.json` file may contain as many projects as you desire... 1, 10, 100
 
 ## Branches & Branch Names  
 
-The source repo is expected to use common git prefixes for releases.  Branch prefixes like `feature/`, `release/`, and `hotfix/` are common. Granted, you don't _need_ to use them in your source code repo.  However, if you do, just note that the `source` repo is the only one that may currently use them.  The `-deploy` and `-data` repos, however, must be concrete (ie `master`, `main`, etc.).
-
-> Note:  
-> Please let me know if you feel the name prefix logic should be extended into `-deploy` and `-data`.  I did ask for several opinions from trusted dev gurus, along the way, and they all felt it added complexity that would probably never be used.
-
+Common deployment practices, such as "[GitFlow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow)", encourage using branch prefixes (i.e. `feature/`, `release/`, `hotfix/`, etc.) and associating deployment rules or environments with those branches.  They are not required to use the `cicd.sh` script.  Should you decide to use branch prefixes you must _either_ match the branch names within the `-deploy` and `-data` repos or use a concrete name (without a prefix) for these other two repositories.
 
 ```json
 {
@@ -115,14 +114,14 @@ The source repo is expected to use common git prefixes for releases.  Branch pre
       "development": {
         "branches": {
           "source": "feature/",
-          "data"  : "master",
-          "deploy": "main"
+          "data"  : "feature/",
+          "deploy": "feature/"
         }
       },
       "staging": {
         "branches": {
           "source": "release/",
-          "data"  : "master",
+          "data"  : "release/",
           "deploy": "main"
         }
       },
@@ -166,6 +165,7 @@ myproject
     deploy : /cicd-sh/myproject-deploy
   Repos:
     source : ssh://gitservername/myproject
+             ... cleaning
              ... updating
     data   : ssh://gitservername/myproject-data
              ... updating
@@ -174,22 +174,29 @@ myproject
   Environments:
     development (feature/)
       processing feature/f001a
-        detecting changes
         no changes ... skipping
       processing feature/f001b
-        detecting changes
+        changes detected
+        aseembling build
         removing old build path
-        assembling build folder
-        build staged
-        executing deploy script
+        fetch changes
+        copy updated source
+        update environment data
+        merge environment data
+        update environment deploy scripts
+        merge environment deploy scripts
+        build assembled
+        deploying build
         success reported
-        no archive path set
+        deployed
+        archiving build
+        archive complete
+        updating local branch
+        local branch updated
       processing feature/f002a
-        detecting changes
         no changes ... skipping
     staging (release/)
       processing release/r001
-        detecting changes
         removing old build path
         assembling build folder
         build staged
@@ -197,11 +204,9 @@ myproject
         failure reported
         archiving build
       processing release/r002
-        detecting changes
         no changes ... skipping
     production (main)
       processing main
-        detecting changes
         removing old build path
         assembling build folder
         build staged
@@ -239,6 +244,9 @@ This one I may need to wait on feedback for.  The script performs basic checks, 
 
 **Incorporate Vault Storage**  
 Add logic to tokenize the `-deploy` and `-data` folders so secrets and senstive information can be pulled from a secure key storage area or vault.  
+
+**Create Docker Version**  
+At the time of this writing, feedback is just starting to come in.  And, I'm actively making tweaks based on those changes.  However, once it stabilizes a bit, a Docker version of `cicd.sh` is the most natural step.  
 
 ## Contact Info  
 

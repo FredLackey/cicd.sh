@@ -87,7 +87,7 @@ The monitoring stage of the `cicd.sh` script depends on items existing in the `b
 
 ##### Source (`source`)
 
-Name or prefix of the branch to monitor in your application's source repo.  Since this is being defined _under_ the environment object, we are essentially tying a specific branch or branch prefix to an environment.  **The _source_ branch is the only branch that may contain a pattern or prefix!**  
+Concrete name or name prefix of the branch to monitor in your application's source repo.  Since this is being defined _under_ the environment object, we are essentially tying a specific branch or branch prefix to an environment.
 
 > GitFlow Workflow ([more info](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow))  
 > One of the most common workflows used to determine the branch-environment pattern is that described with [GitFlow](https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow).  
@@ -102,15 +102,18 @@ The examples in this repo follow a simplified approach similar to [GitFlow](http
 
 ##### Data (`data`)
 
-The concrete name of the branch containing your environment-specific data (usually `main` or `mater`).  Patterns are not allowed.
+Concrete name or name prefix of the branch containing your environment-specific data.  Concrete names without prefixes are always allowed.  Should a branch name prefix be used here (i.e. `feature/`, `release/`, etc.), it must match the branch name in your application's source repository.
 
 ##### Deploy (`deploy`)
 
-The concrete name of the branch containing your environment-specific `deploy.sh` script (usually `main` or `mater`).  Patterns are not allowed.
+Concrete name or name prefix of the branch containing your environment-specific data.  Concrete names without prefixes are always allowed.  Should a branch name prefix be used here (i.e. `feature/`, `release/`, etc.), it must match the branch name in your application's source repository.
 
 #### Archives Object (`archives`)  
 
 An optional object used to instruct the `cicd.sh` script to create an archive of the build depending on the result from the `deploy.sh` routine.  If the `archives` object is supplied you may include one or both of the `success` and `failure` objects.
+
+> **Important:**  
+> Should the archive step fail for any reason (e.g. running out of disk space, storage device being offline, etc.) the archive step will show as failed however subsequent processing steps will continue normally.
 
 #### Success Archive Object (`success`) & Failure Archive Object (`failure`)  
 
