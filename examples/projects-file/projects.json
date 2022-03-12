@@ -6,20 +6,20 @@
       "deploy": "ssh://gitservername/myproject-deploy"
     },
     "folders": {
-      "source": "/cicd-sh/myproject",
-      "data"  : "/cicd-sh/myproject-data",
-      "deploy": "/cicd-sh/myproject-deploy"
+      "source": "/srv/cicd/mysolution/working/myproject",
+      "data"  : "/srv/cicd/mysolution/working/myproject-data",
+      "deploy": "/srv/cicd/mysolution/working/myproject-deploy"
     },
     "environments": {
       "development": {
         "branches": {
           "source": "feature/",
-          "data"  : "master",
-          "deploy": "main"
+          "data"  : "feature/",
+          "deploy": "feature/"
         },
         "archives": {
           "failure" : {
-            "path"  : "/cicd-sh/_failure",
+            "path"  : "/srv/cicd/mysolution/archives/development/failure",
             "excludes" : ".git,node_modules"
           }
         }
@@ -27,12 +27,12 @@
       "staging": {
         "branches": {
           "source": "release/",
-          "data"  : "master",
-          "deploy": "main"
+          "data"  : "release/",
+          "deploy": "release/"
         },
         "archives": {
           "failure" : {
-            "path"  : "/cicd-sh/_failure",
+            "path"  : "/srv/cicd/mysolution/archives/staging/failure",
             "excludes" : ".git,node_modules"
           }
         }
@@ -45,11 +45,11 @@
         },
         "archives": {
           "success" : {
-            "path"  : "/cicd-sh/_success",
+            "path"  : "/srv/cicd/mysolution/archives/production/success",
             "excludes" : ".git,.env,node_modules,.vscode"
           },
           "failure" : {
-            "path"  : "/cicd-sh/_failure",
+            "path"  : "/srv/cicd/mysolution/archives/production/failure",
             "excludes" : ".git,.env,node_modules,.vscode"
           }
         }
