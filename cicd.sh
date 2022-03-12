@@ -1,6 +1,414 @@
 #!/bin/bash
 
+stage_repo() {
+
+  # Local copies of each repo are maintained to minimize calls to the source control server.
+
+  REPO_URL=$1
+  LOCAL_PATH=$2
+  FOLDER_NAME="${REPO_URL##*/}"
+
+  if [ -d "$LOCAL_PATH/_temp" ]; then
+    echo "             ... cleaning"
+    eval "rm -rf \"$LOCAL_PATH/_temp\""
+  fi
+
+  if [ -d "$LOCAL_PATH/_" ]; then
+    echo "             ... updating"
+    eval "git -C \"$LOCAL_PATH/_\" pull &> /dev/null"
+    return 0
+  fi
+
+  eval "mkdir -p \"$LOCAL_PATH/_temp\""
+  echo "             ... fetching"
+  eval "git -C \"$LOCAL_PATH/_temp\" clone $REPO_URL &> /dev/null"
+
+  if [ ! -d "$LOCAL_PATH/_temp/$FOLDER_NAME" ]; then
+    return 1
+  fi
+
+  eval "mv \"$LOCAL_PATH/_temp/$FOLDER_NAME\" \"$LOCAL_PATH/_\""
+  eval "rm -rf \"$LOCAL_PATH/_temp\""
+
+  if [ ! -d "$LOCAL_PATH/_" ]; then
+    return 1
+  fi
+
+  return 0
+
+}
+stage_branches() {
+
+  # Local copies of all remote branches allow for quick comparisons and copy operations.
+
+  LOCAL_PATH=$1
+  PREFIX="refs/remotes/origin/"
+
+  echo "             ... staging"
+
+  if [ ! -d "$LOCAL_PATH/_" ]; then
+    echo "             ... master not found ... skipping"
+    return 1
+  fi
+
+  REMOTE_BRANCHES=()
+  eval "$(git -C $LOCAL_PATH/_ for-each-ref --shell --format='REMOTE_BRANCHES+=(%(refname))' refs/remotes/)"
+
+  for REMOTE in "${REMOTE_BRANCHES[@]}"; do
+
+    BRANCH_NAME=${REMOTE#"$PREFIX"}
+    if [ $BRANCH_NAME == "HEAD" ]; then
+      continue
+    fi
+  
+    BRANCH_PATH="$LOCAL_PATH/$BRANCH_NAME"
+    if [ -d "$BRANCH_PATH" ]; then
+      continue
+    fi
+  
+    PARENT_PATH=$(dirname $BRANCH_PATH)
+    eval "mkdir -p $PARENT_PATH"
+    if [ ! -d "$PARENT_PATH" ]; then
+      echo "             ... cannot create storage ... skipping"
+      return 1
+    fi
+  
+    eval "cp -r $LOCAL_PATH/_ $BRANCH_PATH"
+    if [ ! -d "$BRANCH_PATH" ]; then
+      echo "             ... local branch not created ... skipping"
+      return 1
+    fi
+
+    eval "git -C $BRANCH_PATH fetch --quiet"
+    eval "git -C $BRANCH_PATH checkout $BRANCH_NAME &> /dev/null"
+
+  done
+
+  return 0
+
+}
+assemble_build() {
+
+  # Source, -data, and -deploy repos are merged to create a build folder.
+
+  echo "        aseembling build"
+
+  ENVIRONMENT_NAME=$1
+  SOURCE_BRANCH_PATH=$2
+  SOURCE_BRANCH_NAME=$3
+  DATA_PATH=$4
+  DATA_BRANCH=$5
+  DEPLOY_PATH=$6
+  DEPLOY_BRANCH=$7
+
+  GIT_EXCLUDES=".dropbox,.DS_Store,.git,_gsdata_,.idea,node_modules,.vscode"
+
+  # If data branch is prefixed 
+  if [[ $DATA_BRANCH == */ ]]; then
+    # ... then match with the source branch
+    DATA_PATH_FULL="$DATA_PATH/$SOURCE_BRANCH_NAME"
+  else
+    # otherwise use concrete name
+    DATA_PATH_FULL="$DATA_PATH/$DATA_BRANCH"
+  fi
+
+  if [ ! -d "$DATA_PATH_FULL" ]; then
+    echo "        data branch not staged"
+    return 1
+  fi
+  if [ ! -d "$DATA_PATH_FULL/$ENVIRONMENT_NAME" ]; then
+    echo "        data branch not intact"
+    return 1
+  fi
+
+  # If deploy branch is prefixed 
+  if [[ $DEPLOY_BRANCH == */ ]]; then
+    # ... then match with the source branch
+    DEPLOY_PATH_FULL="$DEPLOY_PATH/$SOURCE_BRANCH_NAME"
+  else
+    # otherwise use concrete name
+    DEPLOY_PATH_FULL="$DEPLOY_PATH/$DEPLOY_BRANCH"
+  fi
+
+  if [ ! -d "$DEPLOY_PATH_FULL" ]; then
+    echo "        deploy branch not staged"
+    return 1
+  fi
+  if [ ! -d "$DEPLOY_PATH_FULL/$ENVIRONMENT_NAME" ]; then
+    echo "        deploy branch not intact"
+    return 1
+  fi
+
+  BUILD_ROOT_PATH="$SOURCE_BRANCH_PATH"
+  BUILD_ROOT_PATH=${BUILD_ROOT_PATH%"$SOURCE_BRANCH_NAME"}
+  
+  TEMP_PATH="$BUILD_ROOT_PATH""_temp"
+  BUILD_PATH="$BUILD_ROOT_PATH""_build"
+  
+  if [ -d "$TEMP_PATH" ]; then
+    echo "        remove old temp path"
+    eval "rm -rf $TEMP_PATH"
+    if [ -d "$TEMP_PATH" ]; then
+      echo "        temp path not removed"
+      return 1
+    fi
+  fi
+
+  if [ -d "$BUILD_PATH" ]; then
+    echo "        removing old build path"
+    eval "rm -rf $BUILD_PATH"
+    if [ -d "$BUILD_PATH" ]; then
+      echo "        build path not removed"
+      return 1
+    fi
+  fi
+
+  # Copy the branch being deployed to a temp path for updating
+  eval "cp -r $SOURCE_BRANCH_PATH $TEMP_PATH"
+  if [ ! -d "$TEMP_PATH" ]; then
+    echo "        build path not created"
+    return 1
+  fi
+
+  # Pull the latest changes for the branch and remove git folder
+  echo "        fetch changes"
+  eval "git -C $TEMP_PATH pull --quiet &> /dev/null"
+  eval "rm -rf $TEMP_PATH/.git &> /dev/null"
+
+  # Creat the build folder
+  eval "mkdir -p $BUILD_PATH"
+
+  # Copy the updated source code from the temp folder into the _build/deploy folder
+  echo "        copy updated source"
+  eval "cp -r $TEMP_PATH $BUILD_PATH/deploy"
+
+  # Merge the environment-specific data into the _build/deploy folder
+  echo "        update data"
+  eval "git -C $DATA_PATH/$SOURCE_BRANCH_NAME pull --quiet &> /dev/null"
+  echo "        merge data"
+  eval "rsync -a -I --exclude={$GIT_EXCLUDES} $DATA_PATH_FULL/$ENVIRONMENT_NAME/ $BUILD_PATH/deploy/"
+
+  # Merge the environment-specific deploy scripts into the root of the _build folder
+  echo "        update deploy scripts"
+  eval "git -C $DEPLOY_PATH/$SOURCE_BRANCH_NAME pull --quiet &> /dev/null"
+  echo "        merge deploy scripts"
+  eval "rsync -a -I --exclude={$GIT_EXCLUDES} $DEPLOY_PATH_FULL/$ENVIRONMENT_NAME/ $BUILD_PATH/"
+
+  return 0
+
+}
+deploy_build() {
+
+  # Environment-specific deploy.sh script is called to perform custom deployment steps.
+
+  echo "        deploying build"
+
+  SOURCE_BRANCH_PATH=$1
+
+  if [ ! -d "$SOURCE_BRANCH_PATH/_build/deploy" ]; then
+    echo "        build not staged"
+    return 1
+  fi
+  if [ ! -f "$SOURCE_BRANCH_PATH/_build/deploy.sh" ]; then
+    echo "        deploy script missing"
+    return 1
+  fi
+
+  source "$SOURCE_BRANCH_PATH/_build/deploy.sh"
+
+  if deploy-sh; then
+    echo "        success reported"
+    return 0
+  else
+    echo "        failure reported"
+    return 1
+  fi
+
+}
+archive_build() {
+
+  # Builds are optionally archived upon success, failure, or either.
+
+  BUILD_PATH=$1
+  ARCHIVE_BASE_PATH=$2
+  ARCHIVE_EXCLUDES=$3
+
+  echo "        archiving build"
+
+  ARCHIVE_DATE=$(date +"%Y%m%d%H%M%S")
+  ARCHIVE_PATH="$ARCHIVE_BASE_PATH/$ARCHIVE_DATE"
+
+  if [ "$ARCHIVE_EXCLUDES" == "null" ]; then
+    ARCHIVE_CMD="rsync -arv --no-links --quiet $BUILD_PATH/ $ARCHIVE_PATH"
+  else
+    ARCHIVE_CMD="rsync -arv --no-links --quiet --exclude={$ARCHIVE_EXCLUDES} $BUILD_PATH/ $ARCHIVE_PATH"
+  fi
+
+  # echo "ARCHIVE_CMD $ARCHIVE_CMD"
+  # return 1
+
+  if [ ! -d $BUILD_PATH ]; then
+    echo "        build path missing"
+    return 1
+  fi
+
+  eval "mkdir -p $ARCHIVE_BASE_PATH"
+  if [ ! -d "$ARCHIVE_BASE_PATH" ]; then
+    echo "        archive folder not ready"
+    return 1
+  fi
+
+  eval "$ARCHIVE_CMD"
+  if [ ! -d "$ARCHIVE_PATH" ]; then
+    echo "        archive not created"
+    return 1
+  fi
+
+  return 0
+
+}
+update_branch() {
+
+  # Local branch copy is updated after a build to ensure the current changes to not trigger an additional build.
+
+  echo "        updating local branch"
+
+  eval "git -C $BRANCH_PATH fetch --quiet &> /dev/null"
+  LOCAL=$(git -C $BRANCH_PATH rev-parse HEAD);
+  REMOTE=$(git -C $BRANCH_PATH rev-parse @{u});
+
+  if [ $LOCAL == $REMOTE ]; then
+    echo "        no changes detected"
+    return 1
+  fi
+
+  eval "git -C $BRANCH_PATH pull --quiet &> /dev/null"
+  LOCAL=$(git -C $BRANCH_PATH rev-parse HEAD);
+  REMOTE=$(git -C $BRANCH_PATH rev-parse @{u});
+
+  if [ $LOCAL == $REMOTE ]; then
+    return 0
+  else
+    return 1
+  fi
+
+}
+process_changes() {
+
+  # Detect changes, process build, archive build (if requested), and update the branch.
+
+  ENVIRONMENT_NAME=$1
+  SOURCE_PATH=$2
+  SOURCE_BRANCH=$3
+  DATA_PATH=$4
+  DATA_BRANCH=$5
+  DEPLOY_PATH=$6
+  DEPLOY_BRANCH=$7
+  ARCHIVES_SUCCESS_PATH=$8 
+  ARCHIVES_SUCCESS_EXCLUDES=$9 
+  ARCHIVES_FAILURE_PATH=${10}
+  ARCHIVES_FAILURE_EXCLUDES=${11}
+
+  PREFIX="refs/remotes/origin/"
+
+  REMOTE_BRANCHES=()
+  eval "$(git -C $SOURCE_PATH/_ for-each-ref --shell --format='REMOTE_BRANCHES+=(%(refname))' refs/remotes/)"
+
+  for REMOTE in "${REMOTE_BRANCHES[@]}"; do
+
+    SHORT_BRANCH_NAME=${REMOTE#"$PREFIX"}
+
+    if [ $SHORT_BRANCH_NAME == "HEAD" ]; then
+      continue
+    fi
+
+    PREFIX="refs/remotes/origin/"
+    FULL_BRANCH_NAME="$PREFIX""$SOURCE_BRANCH"
+
+    # Skip any branches not matching the requested prefix or name
+    if [[ $SOURCE_BRANCH == */ ]]; then
+      if [[ $REMOTE != $FULL_BRANCH_NAME* ]]; then
+        continue
+      fi
+    else
+      if [ $REMOTE != $FULL_BRANCH_NAME ]; then
+        continue
+      fi
+    fi
+
+    echo "      processing $SHORT_BRANCH_NAME"
+
+    BRANCH_PATH="$SOURCE_PATH/$SHORT_BRANCH_NAME"
+    if [ ! -d $BRANCH_PATH ]; then
+      echo "      not staged ... skipping"
+      continue
+    fi
+
+    eval "git -C $BRANCH_PATH fetch --quiet &> /dev/null"
+    LOCAL=$(git -C $BRANCH_PATH rev-parse HEAD);
+    REMOTE=$(git -C $BRANCH_PATH rev-parse @{u});
+
+    # Skip this branch's checksums are matching the server then no changes have been made.  Skip it.
+    if [ $LOCAL == $REMOTE ]; then
+      echo "        no changes ... skipping"
+      continue
+    else
+      echo "        changes detected"
+    fi
+
+    if assemble_build $ENVIRONMENT_NAME $BRANCH_PATH $SHORT_BRANCH_NAME $DATA_PATH $ENV_BRANCH_DATA $DEPLOY_PATH $ENV_BRANCH_DEPLOY; then
+      echo "        build assembled"
+    else
+      echo "        build failed ... skipping"
+      continue
+    fi
+
+    if deploy_build $SOURCE_PATH; then
+      echo "        deployed"
+      ARCHIVE_PATH=$ARCHIVES_SUCCESS_PATH
+      ARCHIVE_EXCLUDES=$ARCHIVES_SUCCESS_EXCLUDES
+    else
+      echo "        deployment failed"
+      ARCHIVE_PATH=$ARCHIVES_FAILURE_PATH
+      ARCHIVE_EXCLUDES=$ARCHIVES_FAILURE_EXCLUDES
+    fi    
+
+    # Failure when archiving must NOT fail the build or prevent branch update!
+    if [ "$ARCHIVE_PATH" == "null" ]; then
+      echo "        no archive path set"
+    else 
+      if archive_build $BUILD_PATH $ARCHIVE_PATH $ARCHIVE_EXCLUDES; then
+        echo "        archive complete"
+      else
+        echo "        archive failed"
+      fi   
+    fi
+
+    # Update the branch to ensure this current update will not trigger another build.
+    if update_branch $BRANCH_PATH; then
+        echo "        local branch updated"
+    else
+        echo "        local branch update failed"
+        return 1
+    fi
+
+  done
+
+  return 0
+}
+
 main() {
+
+  # The main function validates / loads the definition file and then invoke the process per environment.
+
+  local SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  local SCRIPT_ROOT=$(dirname $SCRIPT_PATH)
+  local PROJECTS_FILE="$SCRIPT_ROOT/projects.json"
+
+  if [ ! -f $PROJECTS_FILE ]; then
+    echo "Project file missing.  Cannot continue."
+    return 1
+  fi
 
   for PROJECT in $(jq '. | to_entries | .[].key' projects.json); do
 
@@ -62,68 +470,38 @@ main() {
     echo "    data   : $DATA_PATH"
     echo "    deploy : $DEPLOY_PATH"
     echo "  Repos:"
+
+    #region Clone the repos locally
     echo "    source : $SOURCE_REPO"
-
-    #region Clone the source repo to a locally for future comparisons
-    if [ -d "${SOURCE_PATH}/_" ]; then
-      echo "             ... updating"
-      eval "git -C \"${SOURCE_PATH}/_\" pull &> /dev/null"
-    else
-      eval "mkdir -p \"${SOURCE_PATH}/__\""
-      if [ -d "${SOURCE_PATH}/__/${SOURCE_FOLDER}" ]; then
-        echo "             ... cleaning"
-        eval "rm -rf \"${SOURCE_PATH}/__/${SOURCE_FOLDER}\""
-      fi
-      echo "             ... fetching"
-      eval "git -C \"${SOURCE_PATH}/__\" clone $SOURCE_REPO &> /dev/null"
-      eval "mv \"${SOURCE_PATH}/__/${SOURCE_FOLDER}\" \"${SOURCE_PATH}/_\""
-      eval "rm -rf \"${SOURCE_PATH}/__\""
+    if ! stage_repo "$SOURCE_REPO" "$SOURCE_PATH"; then
+      echo "             ... not retrieved ... skipping"
+      continue
     fi
-    #endregion
-
+    if ! stage_branches "$SOURCE_PATH"; then
+      echo "             ... not staged ... skipping"
+      continue
+    fi
+    
     echo "    data   : $DATA_REPO"
-
-    #region Clone the data repo to a locally for future comparisons
-    if [ -d "${DATA_PATH}/_" ]; then
-      echo "             ... updating"
-      # eval "cd \"${DATA_PATH}/_\" & git pull &> /dev/null"
-      eval "git -C \"${DATA_PATH}/_\" pull &> /dev/null"
-    else
-      eval "mkdir -p \"${DATA_PATH}/__\""
-      if [ -d "${DATA_PATH}/__/${DATA_FOLDER}" ]; then
-        echo "             ... cleaning"
-        eval "rm -rf \"${DATA_PATH}/__/${DATA_FOLDER}\""
-      fi
-      echo "             ... fetching"
-      # eval "git -C \"${DATA_PATH}/__\" clone --quiet $DATA_REPO"
-      eval "git -C \"${DATA_PATH}/__\" clone $DATA_REPO &> /dev/null"
-      eval "mv \"${DATA_PATH}/__/${DATA_FOLDER}\" \"${DATA_PATH}/_\""
-      eval "rm -rf \"${DATA_PATH}/__\""
+    if ! stage_repo "$DATA_REPO" "$DATA_PATH"; then
+      echo "             ... not retrieved ... skipping"
+      continue
     fi
-    #endregion
+    if ! stage_branches "$DATA_PATH"; then
+      echo "             ... not staged ... skipping"
+      continue
+    fi
 
     echo "    deploy : $DEPLOY_REPO"
-
-    #region Clone the deploy repo locally for future comparisons
-    if [ -d "${DEPLOY_PATH}/_" ]; then
-      echo "             ... updating"
-      eval "git -C \"${DEPLOY_PATH}/_\" pull &> /dev/null"
-    else
-      eval "mkdir -p \"${DEPLOY_PATH}/__\""
-      if [ -d "${DEPLOY_PATH}/__/${DEPLOY_FOLDER}" ]; then
-        echo "             ... cleaning"
-        eval "rm -rf \"${DEPLOY_PATH}/__/${DEPLOY_FOLDER}\""
-      fi
-      echo "             ... fetching"
-      eval "git -C \"${DEPLOY_PATH}/__\" clone $DEPLOY_REPO &> /dev/null"
-      eval "mv \"${DEPLOY_PATH}/__/${DEPLOY_FOLDER}\" \"${DEPLOY_PATH}/_\""
-      eval "rm -rf \"${DEPLOY_PATH}/__\""
+    if ! stage_repo "$DEPLOY_REPO" "$DEPLOY_PATH"; then
+      echo "             ... not retrieved ... skipping"
+      continue
+    fi
+    if ! stage_branches "$DEPLOY_PATH"; then
+      echo "             ... not staged ... skipping"
+      continue
     fi
     #endregion
-
-    # Locate all potential source branches
-    REMOTE_BRANCHES=()
-    eval "$(git -C ${SOURCE_PATH}/_ for-each-ref --shell --format='REMOTE_BRANCHES+=(%(refname))' refs/remotes/)"
 
     # Loop through each of the project's declared environments 
     echo "  Environments:"
@@ -159,182 +537,26 @@ main() {
 
       echo "    $ENVIRONMENT_NAME ($ENV_BRANCH_SOURCE)"
 
-      #region Ensure the branches for data & deploy are concrete without wildcards
-      if [[ $ENV_BRANCH_DATA == */ ]]; then
-          echo "      data branch not concrete ... skipping"
+      #region Ensure the branches for data & deploy are appropriate for the source
+      if [[ $ENV_BRANCH_DATA == */ && $ENV_BRANCH_SOURCE != */  ]]; then
+          echo "      data branch prefixed without source ... skipping"
           continue
       fi
-      if [[ $ENV_BRANCH_DEPLOY == */ ]]; then
-          echo "      deploy branch not concrete ... skipping"
+      if [[ $ENV_BRANCH_DATA == */ && $ENV_BRANCH_SOURCE != $ENV_BRANCH_DATA  ]]; then
+          echo "      data branch source mismatch ... skipping"
+          continue
+      fi
+      if [[ $ENV_BRANCH_DEPLOY == */ && $ENV_BRANCH_SOURCE != */ ]]; then
+          echo "      deploy branch prefixed without source ... skipping"
+          continue
+      fi
+      if [[ $ENV_BRANCH_DEPLOY == */ && $ENV_BRANCH_SOURCE != $ENV_BRANCH_DEPLOY ]]; then
+          echo "      deploy branch source mismatch ... skipping"
           continue
       fi
       #endregion
 
-      # Create a fully-qualified prefix to account for branch name patterns
-      PREFIX="refs/remotes/origin/"
-      BRANCH_PREFIX="$PREFIX""$ENV_BRANCH_SOURCE"
-
-      #region Determine the relevant branches based on the name pattern 
-      FILTERED=()
-      for REMOTE in "${REMOTE_BRANCHES[@]}"; do
-
-        if [[ $ENV_BRANCH_SOURCE == */ ]]; then
-          if [[ $REMOTE = $BRANCH_PREFIX* ]]; then
-            FILTERED[${#FILTERED[@]}]=$REMOTE
-          fi
-        else
-          if [ $REMOTE = $BRANCH_PREFIX ]; then
-            FILTERED[${#FILTERED[@]}]=$REMOTE
-          fi
-        fi
-
-      done
-      #endregion
-
-      # Loop through the filtered repos from the pattern matching (ie "feature/*", etc.)
-      for FNAME in "${FILTERED[@]}"; do
-
-        # Strip the prefix from the full branch name
-        WORK_DIR=${FNAME#"$PREFIX"}
-        echo "      processing $WORK_DIR"
-
-        # Create a local copy of the repo for each branch so they can be monitored individually for changes
-        REPO_PATH="${SOURCE_PATH}/${WORK_DIR}"
-        if [ ! -d "$REPO_PATH" ]; then
-          echo "        creating working area"
-
-          # Create the parent folder path in preparation for the cp & clone commands
-          if [[ $WORK_DIR} == *\/* ]]; then
-            PARENT=$(dirname $REPO_PATH)
-            eval "mkdir -p $PARENT"
-            if [ ! -d $PARENT ]; then
-              echo "        parent folder not created ... skipping"
-              continue
-            fi
-          fi
-
-          # Branch copy is made from the master copy.  Branch is checked out in the new location.          
-          eval "cp -r ${SOURCE_PATH}/_ $REPO_PATH"
-          eval "git -C $REPO_PATH fetch --quiet"
-          eval "git -C $REPO_PATH checkout $WORK_DIR &> /dev/null"
-
-          if [ ! -d "$REPO_PATH" ]; then
-              echo "        work area not created ... skipping"
-              continue
-          fi 
-        fi
-
-        # At this point the branch-specific copy would either:
-        #   a: has just been created; or,
-        #   b: is existing and possibly stale.
-
-        # TODO: PERFORM A PULL AFTER A SUCCESSFUL BUILD TO ENSURE THE FOLDER IS UP TO DATE!
-
-        # Fetch the repo's signatures and grab the checksums for the local and remote copies
-        echo "        detecting changes"
-        eval "git -C $REPO_PATH fetch --quiet &> /dev/null"
-        LOCAL=$(git -C $REPO_PATH rev-parse HEAD);
-        REMOTE=$(git -C $REPO_PATH rev-parse @{u});
-
-        # Skip this branch's checksums are matching the server then no changes have been made.  Skip it.
-        if [ $LOCAL == $REMOTE ]; then
-          echo "        no changes ... skipping"
-          continue
-        fi
-
-        # NOTE:
-        # Originally used a block date for the build folder.  May add this later as an archive step.
-
-        # Build path is located parallel to the branch folders in the local storage area for the source repo
-        BUILD_DIR="_build"
-        BUILD_PATH="${SOURCE_PATH}/${BUILD_DIR}"
-
-        #region Remove the build folder if it was leftover from a crash or not properly archived
-        if [ -d "$BUILD_PATH" ]; then
-          echo "        removing old build path"
-          eval "rm -rf $BUILD_PATH"
-          if [ -d "$BUILD_PATH" ]; then
-            echo "        build path not removed ... skipping"
-            continue
-          fi
-        fi
-        #endregion
-
-        #region -- FOLDER VALIDATION --
-        if [ ! -d "${DEPLOY_PATH}/_/${ENVIRONMENT_NAME}" ]; then
-          echo "        deployment folder missing ... skipping"
-          continue
-        fi
-        if [ ! -d "${DATA_PATH}/_/${ENVIRONMENT_NAME}" ]; then
-          echo "        data folder missing ... skipping"
-          continue
-        fi
-        #endregion
-
-        echo "        assembling build folder"
-
-        # Files are assembled under the deploy folder.  
-        # Environment-specific data files are overlayed and overwritten if needed.
-        # Deployment scripts (also environment-specific) are overlayed into the root.
-
-        eval "mkdir -p $BUILD_PATH"
-        eval "cp -r $REPO_PATH $BUILD_PATH/deploy"
-        eval "rsync -a -I ${DATA_PATH}/_/${ENVIRONMENT_NAME}/ $BUILD_PATH/deploy/"
-        eval "rsync -a -I ${DEPLOY_PATH}/_/${ENVIRONMENT_NAME}/ $BUILD_PATH/"
-
-        # The standard script "deploy.sh" must be supplied by the scripts.  It will be in the root of the build folder.          
-        if [ ! -f "$BUILD_PATH/deploy.sh" ]; then
-          echo "        deploy.sh not found ... skipping"
-          continue
-        fi
-
-        echo "        build staged"
-        echo "        executing deploy script"
-
-        # Import the build script
-        source "$BUILD_PATH/deploy.sh"
-
-        if deploy-sh; then
-          echo "        success reported"
-          ARCHIVE_BASE_PATH=$ARCHIVES_SUCCESS_PATH
-          ARCHIVE_EXCLUDES=$ARCHIVES_SUCCESS_EXCLUDES
-        else
-          echo "        failure reported"
-          ARCHIVE_BASE_PATH=$ARCHIVES_FAILURE_PATH
-          ARCHIVE_EXCLUDES=$ARCHIVES_FAILURE_EXCLUDES
-        fi
-
-        # Update the local hope to prevent the same changes from triggering another pull
-        eval "git -C $REPO_PATH pull --quiet &> /dev/null"
-
-        if [ "$ARCHIVE_BASE_PATH" == "null" ]; then
-          echo "        no archive path set"
-          continue
-        else
-          echo "        archiving build"
-        fi
-
-        ARCHIVE_DIR="$*$(date +"%Y%m%d%H%M%S")"
-        ARCHCIVE_PATH="$ARCHIVE_BASE_PATH/$SOURCE_FOLDER/$WORK_DIR/$ARCHIVE_DIR"
-
-        if [ "$ARCHIVE_EXCLUDES" == "null" ]; then
-          ARCHIVE_CMD="rsync -arv --no-links --quiet $BUILD_PATH/ $ARCHCIVE_PATH"
-        else
-          ARCHIVE_CMD="rsync -arv --no-links --quiet --exclude={$ARCHIVE_EXCLUDES} $BUILD_PATH/ $ARCHCIVE_PATH"
-        fi
-
-        eval "mkdir -p $ARCHIVE_BASE_PATH/$SOURCE_FOLDER/$WORK_DIR"
-        if [ ! -d "$ARCHIVE_BASE_PATH/$SOURCE_FOLDER/$WORK_DIR" ]; then
-          echo "        archive folder not ready ... skipping"
-          continue
-        fi
-
-        eval "$ARCHIVE_CMD"
-        if [ ! -d "$ARCHCIVE_PATH" ]; then
-          echo "        archive not created"
-        fi
-
-      done
+      process_changes $ENVIRONMENT_NAME $SOURCE_PATH $ENV_BRANCH_SOURCE $DATA_PATH $ENV_BRANCH_DATA $DEPLOY_PATH $ENV_BRANCH_DEPLOY $ARCHIVES_SUCCESS_PATH $ARCHIVES_SUCCESS_EXCLUDES $ARCHIVES_FAILURE_PATH $ARCHIVES_FAILURE_EXCLUDES
 
     done
 
