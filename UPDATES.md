@@ -9,3 +9,7 @@
 * Updated [`PROJECTS.md`](./PROJECTS.md) file to show path names more similar to real-world scenarios.
 
 * Added [`UPDATES.md`](./UPDATES.md) file to help convey changes more easily to project visitors.
+
+## March 13, 2022  
+
+* Created an area for example `deploy.sh` files along with the first example for pushing a Dockerized Node app to AWS ECR.
