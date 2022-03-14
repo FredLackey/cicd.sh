@@ -12,4 +12,4 @@
 
 ## March 13, 2022  
 
-* Created an area for example `deploy.sh` files along with the first example for pushing a Dockerized Node app to AWS ECR.
+* Created an area for example `deploy.sh` files along with the first example for pushing a Dockerized Node app to AWS ECR.  
