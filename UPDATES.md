@@ -1,5 +1,11 @@
 # Project Updates
 
+## March 18, 2022  
+
+* Added `aws-ec2-amazonlinux.tf` file as Terraform example for EC2 Amazon Linux.
+
+* Added `aws-ec2-ubuntu.tf` file as Terraform example for EC2 Ubuntu.
+
 ## March 12, 2022  
 
 * Refactored the main `cicd.sh` script to make use of functions in an effort to aide newcomers in understanding functionality and process.
