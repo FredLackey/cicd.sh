@@ -1,5 +1,9 @@
 # Project Updates
 
+## March 23, 2022  
+
+* Added `aws-ec2-ping-nginx.tf` file as Terraform example for EC2 Amazon Linux.  Can be used to test basic ECS functionality in the target account.
+
 ## March 18, 2022  
 
 * Added `aws-ec2-amazonlinux.tf` file as Terraform example for EC2 Amazon Linux.
