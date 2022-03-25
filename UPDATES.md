@@ -1,5 +1,9 @@
 # Project Updates
 
+## March 24, 2022  
+
+* Added `aws-ec2-ping-api.tf` file as Terraform example for EC2 Amazon Linux.  Similar to `aws-ec2-ping-nginx.tf` but shows the addition of a execution role which is needed for EC2/ECR services.
+
 ## March 23, 2022  
 
 * Added `aws-ec2-ping-nginx.tf` file as Terraform example for EC2 Amazon Linux.  Can be used to test basic ECS functionality in the target account.
