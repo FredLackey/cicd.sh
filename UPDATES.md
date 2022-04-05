@@ -1,5 +1,9 @@
 # Project Updates
 
+## April 5, 2022  
+
+* Added [`aws-cli/assume-role`](./examples/others/aws-cli/assume-role/) folder with examples showing how to assume the role of a child account, create an ECR repository in the child account, and to push a dockerized API to that child account using the role ARN.
+
 ## March 24, 2022  
 
 * Added `aws-ec2-ping-api.tf` file as Terraform example for EC2 Amazon Linux.  Similar to `aws-ec2-ping-nginx.tf` but shows the addition of a execution role which is needed for EC2/ECR services.

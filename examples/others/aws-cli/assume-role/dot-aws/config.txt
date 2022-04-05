@@ -1,0 +1,12 @@
+[default]
+region = us-gov-west-1
+output = json
+
+[profile gov-mgmt]
+region = us-west-1
+output = json
+
+[profile gov-staging]
+role_arn = arn:aws-us-gov:iam::123456789123:role/BuildBoxRole
+source_profile = gov-mgmt
+region = us-gov-west-1
