@@ -1,0 +1,9 @@
+_archive/
+.vscode/
+assets/
+node_modules/
+scripts/
+build.sh
+push.sh
+repo.sh
+fix.sh

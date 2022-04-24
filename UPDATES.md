@@ -1,5 +1,11 @@
 # Project Updates
 
+## April 23, 2022  
+
+* Added [`aws-ecs-boundaries`](./examples/others/terraform/aws-ecs-boundaries.tf) example showing how to spin up a new AWS environment using security boundaries and load balancers.
+
+* Added [`complex-api-example`](./examples/others/node/complex-api-example/) Node API example showing how to deal with a custom base path (needed for the `aws-ecs-boundaries` example).
+
 ## April 5, 2022  
 
 * Added [`aws-cli/assume-role`](./examples/others/aws-cli/assume-role/) folder with examples showing how to assume the role of a child account, create an ECR repository in the child account, and to push a dockerized API to that child account using the role ARN.

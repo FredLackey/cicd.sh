@@ -1,0 +1,48 @@
+{
+  "name": "complex-api-example",
+  "version": "0.0.0",
+  "description": "Complex API Example",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node ./src/index.js",
+
+    
+    "simple:a": "NODE_PORT=3001 NODE_ALIAS=A node ./src/index.js",
+    "simple:b": "NODE_PORT=3002 NODE_ALIAS=B node ./src/index.js",
+    "simple": "UPSTREAM_A=localhost:3001 UPSTREAM_B=localhost:3002 node ./src/index.js",
+
+    
+
+
+    "custombase:a": "NODE_PORT=3001 NODE_ALIAS=A NODE_BASE=a node ./src/index.js",
+    "custombase:b": "NODE_PORT=3002 NODE_ALIAS=B NODE_BASE=b node ./src/index.js",
+    "custombase": "UPSTREAM_A=localhost:3001/a UPSTREAM_B=localhost:3002/b node ./src/index.js",
+
+
+
+
+    "complex:a:a": "NODE_PORT=3011 NODE_BASE=aa NODE_ALIAS=AA node ./src/index.js",
+    "complex:a:b": "NODE_PORT=3012 NODE_BASE=ab NODE_ALIAS=AB node ./src/index.js",
+    "complex:a": "NODE_PORT=3010 NODE_BASE=a NODE_ALIAS=A UPSTREAM_AA=localhost:3011/aa UPSTREAM_AB=localhost:3012/ab  node ./src/index.js",
+
+    "complex:b:a": "NODE_PORT=3021 NODE_BASE=ba NODE_ALIAS=BA node ./src/index.js",
+    "complex:b:b": "NODE_PORT=3022 NODE_BASE=bb NODE_ALIAS=BB node ./src/index.js",
+    "complex:b": "NODE_PORT=3020 NODE_BASE=b NODE_ALIAS=B UPSTREAM_BA=localhost:3021/ba UPSTREAM_BB=localhost:3022/bb  node ./src/index.js",
+
+    "complex": "NODE_PORT=3030 UPSTREAM_A=localhost:3010/a/status UPSTREAM_B=localhost:3020/b/status  node ./src/index.js"
+
+  },
+  "keywords": [],
+  "author": {
+    "email": "fred.lackey@gmail.com",
+    "name": "Fred Lackey",
+    "url": "http://fredlackey.com"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "cleaner-node": "^0.17.11",
+    "dotenv": "^16.0.0",
+    "express": "^4.17.3",
+    "node-fetch": "^2.6.7"
+  }
+}
